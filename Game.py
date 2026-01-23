@@ -89,6 +89,8 @@ class Player():
     def getAction(self):
         pass
 
+# TODO actor critic system
+
 # Need some adjustment to the game features.
 class PolicyNetwork(nn.Module):
     def __init__(self):
@@ -115,8 +117,6 @@ class PolicyNetwork(nn.Module):
         
         batch_size = x.size(0)
         x = x.view(batch_size, MAP_W, MAP_H, NUM_ACTIONS)
-        
-        return x
         
         return x
 
@@ -361,6 +361,64 @@ class RTSGame():
                         score += tile_info.carry_gold
                     elif tile_info.actor_type == VILLAGER_TYPE:
                         score += 1
+                        
+def training():
+    policy = PolicyNetwork()
+    optimizer = optim.Adam(policy.parameters(), lr=0.001)
+    episodes = 10000
+    
+    pygame.init()
+    clock = pygame.time.Clock()
+    
+    
+    for episode in range(episodes):
+        print(episode)
+
+        if p2 == "heuristic":   
+            p2_model = heuristicPlayer(1)
+        else: 
+            p2_model = NNPlayer(0, policy)
+        p1 = NNPlayer(0, policy)
+        game = RTSGame(p1, p2_model)
+        
+        log_probs = []
+        rewards = []
+
+        entropy_term = 0
+
+        actions, done, win, reward = game.step()
+        log_prob = p1.getProbabilities(game, torch.tensor(actions[0]))
+        log_probs.append(log_prob)
+        p = torch.exp(log_prob)
+        entropy = -p * log_prob
+        entropy_term += entropy
+        
+        while done != 1:
+            if (episode % 200 == 0 or reward[0] > 10):
+                screen = pygame.display.set_mode((screen_w, screen_h))
+                game.set_screen(screen)
+                game.display()
+                clock.tick(30)
+                
+            actions, done, win, reward = game.step()
+            log_prob = p1.getProbabilities(game, torch.tensor(actions[0]))
+            log_probs.append(log_prob)
+            p = torch.exp(log_prob)
+            entropy = -p * log_prob
+            entropy_term += entropy
+            
+        
+        rewards = [reward[0]]*len(log_probs)
+        rewards = torch.tensor(rewards)
+        loss = []
+        # print(reward)
+        for log_prob, R in zip(log_probs, rewards):
+            loss.append(-log_prob * R)
+        
+        optimizer.zero_grad()
+        loss = torch.stack(loss).sum() - (0.01 * entropy_term)
+        loss.backward()
+        optimizer.step()
 
 new = RTSGame()
 pygame.init()
