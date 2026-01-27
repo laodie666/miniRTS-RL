@@ -135,7 +135,12 @@ class NNPlayer(Player):
         return action
     
     def getProbabilities(self, action):
-        return self.m.log_prob(action)    
+        return self.m.log_prob(action) 
+    
+class RandomPlayer(Player):
+
+    def getAction(self, game: "RTSGame"):
+        return np.random.random_integers(0, NUM_ACTIONS, (MAP_W, MAP_H))
 
 
 class tile:
@@ -238,8 +243,8 @@ class RTSGame():
 
         if not pygame.font.get_init():
             pygame.font.init()
-        self.font = pygame.font.SysFont("monospace", 15, bold=True)
-
+        self.unit_font = pygame.font.SysFont("monospace", 15, bold=True)
+        self.stats_font = pygame.font.SysFont("Arial", 8, bold=False)
 
     def drawGrid(self):
         for x in range(MAP_W):
@@ -255,30 +260,38 @@ class RTSGame():
                 pygame.draw.rect(self.screen, (50, 50, 50), rect, 1)
 
                 packed_val = self.map[x, y]
-                tile_data = bitunpackTile(int(packed_val))
+                tile_info = bitunpackTile(int(packed_val))
 
                 # default to '?' if type not found in dictionary
-                char_to_draw = ASCII_CHARS.get(tile_data.actor_type, '?') 
+                char_to_draw = ASCII_CHARS.get(tile_info.actor_type, '?') 
 
-                text_color = PLAYER_COLORS.get(tile_data.player_n, WHITE)
+                text_color = PLAYER_COLORS.get(tile_info.player_n, WHITE)
 
                 # render text
-                text_surf = self.font.render(char_to_draw, True, text_color)
-                text_rect = text_surf.get_rect(center=(center_x, center_y))
-                
-                self.screen.blit(text_surf, text_rect)
+                unit_text_surf = self.unit_font.render(char_to_draw, True, text_color)
+                unit_text_rect = unit_text_surf.get_rect(center=(center_x, center_y))
+            
+                self.screen.blit(unit_text_surf, unit_text_rect)
 
     def display (self):
-        pygame.init()
-        SCREEN = pygame.display.set_mode((WINDOW_W, WINDOW_H))
-        CLOCK = pygame.time.Clock()
-        SCREEN.fill(BLACK)
+        self.screen.fill(BLACK)
         while True:
             self.drawGrid()
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()
+            
+            if pygame.mouse.get_pressed()[0]:
+
+                if 0 <= pygame.mouse.get_pos()[0] <= WINDOW_W and 0 <= pygame.mouse.get_pos()[1] <= WINDOW_H:
+                    grid_x = pygame.mouse.get_pos()[0] // BLOCKSIZE
+                    grid_y = pygame.mouse.get_pos()[1] // BLOCKSIZE
+                    tile_info = bitunpackTile(self.map[grid_x, grid_y])
+                    
+                    print(f"mouse click at grid {(grid_x, grid_y)}")
+                    print(f"tile info: hp:{tile_info.hp}, gold:{tile_info.carry_gold}")
+
 
             pygame.display.update()
         
@@ -323,8 +336,12 @@ class RTSGame():
                             tile_info.carry_gold -= VILLAGER_COST
                             self.map[x, y] = bitpackTile(tile_info)
 
-                    # TODO Barrack make troop
-                    
+                    if tile_info.actor_type == BARRACK_TYPE:
+                        if target_tile_info.player_n == NO_PLAYER and tile_info.carry_gold >= TROOP_COST:
+                            self.map[tx, ty] = bitpackTile(tile(side, TROOP_TYPE, TROOP_HP, 0))
+                            tile_info.carry_gold -= TROOP_COST
+                            self.map[x, y] = bitpackTile(tile_info)
+
                     # Villager collect, return gold, make tc and barrack
                     elif tile_info.actor_type == VILLAGER_TYPE:
                         if action[x][y] == TURN_BARRACK and tile_info.carry_gold >= BARRACK_COST:
@@ -332,7 +349,8 @@ class RTSGame():
                         elif action[x][y] == TURN_TC and tile_info.carry_gold >= TC_COST:
                             map[x][y] = bitpackTile(newTCTile())
                         elif target_tile_info.actor_type == GOLD_TYPE:
-                            tile_info.carry_gold += 1
+                            if tile_info.carry_gold <= 10:
+                                tile_info.carry_gold += 1
                             self.map[x, y] = bitpackTile(tile_info)
                         elif target_tile_info.player_n == NO_PLAYER:
                             self.map = self.move_unit(self.map, (x, y), (tx, ty))
@@ -342,7 +360,14 @@ class RTSGame():
                             self.map[x, y] = bitpackTile(tile_info)
                             self.map[tx, ty] = bitpackTile(target_tile_info)
                         
-                    # TODO troop move and attack
+                    elif tile_info.actor_type == TROOP_TYPE:
+                        if target_tile_info.player_n == NO_PLAYER:
+                            self.map = self.move_unit(self.map, (x, y), (tx, ty))
+                        elif target_tile_info.player_n != side:
+                            # Opponent unit do dmg
+                            target_tile_info.hp -= 1
+                            self.map[tx,ty] = bitpackTile(target_tile_info)
+
                     
         reward = self.get_score()
         win = -1
@@ -362,68 +387,14 @@ class RTSGame():
                     elif tile_info.actor_type == VILLAGER_TYPE:
                         score += 1
                         
-def training():
-    policy = PolicyNetwork()
-    optimizer = optim.Adam(policy.parameters(), lr=0.001)
-    episodes = 10000
-    
-    pygame.init()
-    clock = pygame.time.Clock()
-    
-    
-    for episode in range(episodes):
-        print(episode)
+def train(p1: Player, p2: Player):
+    # ACTOR CRITIC?
+    return None
 
-        if p2 == "heuristic":   
-            p2_model = heuristicPlayer(1)
-        else: 
-            p2_model = NNPlayer(0, policy)
-        p1 = NNPlayer(0, policy)
-        game = RTSGame(p1, p2_model)
-        
-        log_probs = []
-        rewards = []
-
-        entropy_term = 0
-
-        actions, done, win, reward = game.step()
-        log_prob = p1.getProbabilities(game, torch.tensor(actions[0]))
-        log_probs.append(log_prob)
-        p = torch.exp(log_prob)
-        entropy = -p * log_prob
-        entropy_term += entropy
-        
-        while done != 1:
-            if (episode % 200 == 0 or reward[0] > 10):
-                screen = pygame.display.set_mode((screen_w, screen_h))
-                game.set_screen(screen)
-                game.display()
-                clock.tick(30)
-                
-            actions, done, win, reward = game.step()
-            log_prob = p1.getProbabilities(game, torch.tensor(actions[0]))
-            log_probs.append(log_prob)
-            p = torch.exp(log_prob)
-            entropy = -p * log_prob
-            entropy_term += entropy
-            
-        
-        rewards = [reward[0]]*len(log_probs)
-        rewards = torch.tensor(rewards)
-        loss = []
-        # print(reward)
-        for log_prob, R in zip(log_probs, rewards):
-            loss.append(-log_prob * R)
-        
-        optimizer.zero_grad()
-        loss = torch.stack(loss).sum() - (0.01 * entropy_term)
-        loss.backward()
-        optimizer.step()
 
 new = RTSGame()
 pygame.init()
 SCREEN = pygame.display.set_mode((WINDOW_W, WINDOW_H))
-
-print(new.get_state().shape)
+new.setScreen(SCREEN)
 
 new.display()
