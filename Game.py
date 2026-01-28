@@ -252,8 +252,8 @@ class RTSGame():
         self.map = np.full((MAP_W, MAP_H), empty_val)
         self.left_side = random.randint(0,1)
         self.right_side = (1+self.left_side)%2
-        self.map[2, 4] = bitpackTile(tile(self.left_side, TC_TYPE, TC_HP, 3))
-        self.map[7, 4] = bitpackTile(tile(self.right_side, TC_TYPE, TC_HP, 3))
+        self.map[3, 4] = bitpackTile(tile(self.left_side, TC_TYPE, TC_HP, 3))
+        self.map[6, 4] = bitpackTile(tile(self.right_side, TC_TYPE, TC_HP, 3))
 
         self.map[0, 4] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, 0))
         self.map[9, 4] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, 0))
@@ -430,6 +430,8 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma):
         rewards = []
         log_probs = []
         state_values = []
+        # Mask out empty spaces
+        masks = []
         
         policy_optimizer.zero_grad()
         critic_optimizer.zero_grad()
@@ -441,6 +443,11 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma):
 
             if side == 0: 
                 state_tensor = game.get_state_tensor()
+                
+                player_map = state_tensor[0, side, :, :] # Get the channel for 'side'
+                mask = player_map > 0
+                masks.append(mask)
+
                 state_values.append(trainee.critic(state_tensor))
                 action = trainee.getAction(game)
                 
@@ -473,12 +480,14 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma):
         # Loss functions
         log_probs = torch.stack(log_probs) 
         state_values = torch.cat(state_values).squeeze()
+        masks = torch.stack(masks)
 
         advantage = returns - state_values.detach()
         
         # Advantage above is [step] shaped while log_prob is probility for [step, MAP_W, MAP_H], need to expand out 
         advantage = advantage.view(-1, 1, 1).expand_as(log_probs)
-        policy_loss = -(log_probs * advantage).mean()
+        policy_loss = -(log_probs * advantage) * masks.float()
+        policy_loss = policy_loss.sum() / (masks.sum() + 1e-7)
             
         critic_loss = F.huber_loss(state_values, returns)
         policy_loss.backward()
@@ -487,7 +496,7 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma):
         policy_optimizer.step()
         critic_optimizer.step()
 
-        print(f"Ep {episode}: Returns {sum(returns)}: Reward_sum {sum(rewards)}")
+        print(f"Ep {episode}: Policy_loss {policy_loss}: Critic_loss {critic_loss}")
         if win != -1:
             done = True
     
