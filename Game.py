@@ -433,6 +433,8 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma):
         policy_optimizer.zero_grad()
         critic_optimizer.zero_grad()
         
+        last_reward = 0
+
         slow = False
         skip = False
         while not done and step <= 50:
@@ -475,7 +477,8 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma):
                 
                 action, state_tensor, win, reward = game.step(action, side)
                 
-                rewards.append(reward)
+                rewards.append(reward - last_reward)
+                last_reward = reward
                 
             else:
                 action, state_tensor, win, reward = game.step(opponent.getAction(game), side)
@@ -483,7 +486,8 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma):
             side = (side + 1) % 2
             step += 1 
         
-        # Reward
+        # Reward, change of game score
+        rewards = np.array(rewards)
         returns = []
         R = 0
         for r in rewards[::-1]:
@@ -510,7 +514,7 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma):
         policy_optimizer.step()
         critic_optimizer.step()
 
-        print(f"Ep {episode}: Returns {sum(returns)}: Reward {reward}")
+        print(f"Ep {episode}: Returns {sum(returns)}: Reward_sum {sum(rewards)}")
     
     return None
 
