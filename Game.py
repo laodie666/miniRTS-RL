@@ -8,6 +8,7 @@ import pygame
 import random
 import numpy as np
 
+
 BLACK = (0, 0, 0)
 WHITE = (200, 200, 200)
 
