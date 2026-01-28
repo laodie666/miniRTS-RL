@@ -403,14 +403,11 @@ class RTSGame():
             for y in range(MAP_H):
                 tile_info = bitunpackTile(self.map[x][y])
                 if tile_info.player_n == side:
-                    if tile_info.actor_type == TC_TYPE:
                         score += tile_info.hp
                         score += tile_info.carry_gold
-                    else:
-                        score += tile_info.hp
         return score
                         
-def train(trainee: NNPlayer, opponent: Player, episodes, gamma):
+def train(trainee: NNPlayer, opponent: Player, episodes, gamma, entropy):
     # ACTOR CRITIC?
     # Initialize optimizer
     
@@ -484,11 +481,16 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma):
 
         advantage = returns - state_values.detach()
         
+        entropy = trainee.m.entropy() * masks.float()  
+        entropy = entropy.sum() / (masks.sum() + 1e-7)
+        
         # Advantage above is [step] shaped while log_prob is probility for [step, MAP_W, MAP_H], need to expand out 
         advantage = advantage.view(-1, 1, 1).expand_as(log_probs)
         policy_loss = -(log_probs * advantage) * masks.float()
         policy_loss = policy_loss.sum() / (masks.sum() + 1e-7)
             
+        policy_loss = policy_loss - entropy * entropy
+
         critic_loss = F.huber_loss(state_values, returns)
         policy_loss.backward()
         critic_loss.backward()
@@ -594,7 +596,7 @@ print(win_rate)
 epochs = 20
 for epoch in range(epochs):
     print(f"epoch {epoch}")
-    train(policy_player, policy_player_copy, 500, 0.95)
+    train(policy_player, policy_player_copy, 500, 0.95, 0.1)
     win_rate = pit(policy_player, policy_player_copy, 50)
     print(win_rate)
     if win_rate[0] - 5 >= win_rate[1]:
