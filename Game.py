@@ -89,7 +89,6 @@ class Player():
     def getAction(self):
         pass
 
-# TODO actor critic system
 
 # Need some adjustment to the game features.
 class PolicyNetwork(nn.Module):
@@ -310,6 +309,8 @@ class RTSGame():
         # Move number channels to the front.
         state_tensor = state_tensor.permute(0, 3, 1, 2) 
         return state_tensor
+
+    # TODO: Vectorize game loop to make it more efficient.
 
     def step(self, action, side):
         empty_val = bitpackTile(tile(NO_PLAYER, EMPTY_TYPE, 0, 0))
@@ -594,6 +595,8 @@ print(win_rate)
 
 epochs = 20
 for epoch in range(epochs):
+    torch.save(policy_nn.state_dict(), f"policy_checkpoint.pt")
+    torch.save(critic_nn.state_dict(), f"critic_checkpoint.pt")
     print(f"epoch {epoch}")
     train(policy_player, policy_player_copy, 500, 0.95, 0.1)
     win_rate = pit(policy_player, policy_player_copy, 50)
