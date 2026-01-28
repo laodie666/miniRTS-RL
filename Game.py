@@ -311,7 +311,6 @@ class RTSGame():
         state_tensor = state_tensor.permute(0, 3, 1, 2) 
         return state_tensor
 
-
     def step(self, action, side):
         empty_val = bitpackTile(tile(NO_PLAYER, EMPTY_TYPE, 0, 0))
         processed = np.zeros((MAP_W, MAP_H)) 
@@ -420,9 +419,6 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma, entropy_coef):
     policy_optimizer = optim.Adam(trainee.policy.parameters())
     critic_optimizer = optim.Adam(trainee.critic.parameters())
     
-    pygame.init()
-    clock = pygame.time.Clock()
-    
     side = 0
     # Episodes
     for episode in range(episodes):
@@ -442,7 +438,7 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma, entropy_coef):
         last_reward = 0
 
 
-        while not done and step <= 50:
+        while not done and step <= 100:
 
             if side == 0: 
                 state_tensor = game.get_state_tensor()
@@ -524,7 +520,7 @@ def pit(p1: Player, p2: Player, num_games):
         printed_side = 0
         slow = False
         skip = False
-        while not done and step <= 50:
+        while not done and step <= 100:
             
             if  game_num == 0:
                 if not printed_side:
