@@ -97,6 +97,8 @@ class PolicyNetwork(nn.Module):
         self.conv1 = nn.Conv2d(CHANNEL_NUM, 8, 3)
         self.conv2 = nn.Conv2d(8, 16, 3)
         
+        # Note this conversion from CNN to Linear is so hand wavy, there is probably some way to make this easier that I should look into.
+        # there is a + 1 in the end to make the agent aware of what side it is on.
         self.fc1 = nn.Linear((MAP_W - 4) * (MAP_H - 4) * 16 + 1, 120)
         self.fc2 = nn.Linear(120, 84)
         self.fc3 = nn.Linear(84, MAP_W * MAP_H * NUM_ACTIONS)
@@ -106,6 +108,7 @@ class PolicyNetwork(nn.Module):
         x = F.relu(self.conv2(x))
         x = torch.flatten(x, 1) 
         
+        # Extend the side tensor and pass it into the first linear network.
         side_tensor = torch.full((x.shape[0], 1), side)
         x = torch.cat((x, side_tensor), dim=1)
         
