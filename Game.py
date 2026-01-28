@@ -151,9 +151,8 @@ class NNPlayer(Player):
         self.critic = critic
         
     def getAction(self, game: "RTSGame"):
-        state_tensor = torch.from_numpy(game.get_state()).float().unsqueeze(0)
-
-        logits = self.policy(state_tensor)
+        
+        logits = self.policy(game.get_state_tensor())
         self.m = torch.distributions.Categorical(logits=logits)
 
         action = self.m.sample()
@@ -168,7 +167,7 @@ class NNPlayer(Player):
 class RandomPlayer(Player):
 
     def getAction(self, game: "RTSGame"):
-        return np.random.random_integers(0, NUM_ACTIONS, (MAP_W, MAP_H))
+        return np.random.randint(0, NUM_ACTIONS, size = (MAP_W, MAP_H))
 
 
 class tile:
@@ -323,20 +322,31 @@ class RTSGame():
 
             pygame.display.update()
         
-    def move_unit(map, cur_pos, target_pos):
-        map[target_pos] = map[cur_pos]
-        map[cur_pos] = bitpackTile(tile(NO_PLAYER, EMPTY_TYPE, 0, 0))
+    def move_unit(self, cur_pos, target_pos):
+        self.map[target_pos] = self.map[cur_pos]
+        self.map[cur_pos] = bitpackTile(tile(NO_PLAYER, EMPTY_TYPE, 0, 0))
         return map
 
     # Return the features of every tile
     def get_state(self):
         return np.array([bitunpackTile(self.map[x, y]).onehotEncode() for x in range(MAP_W) for y in range(MAP_H)]).reshape(MAP_W, MAP_H, -1)
 
+    def get_state_tensor(self):
+        state_tensor = torch.from_numpy(self.get_state()).float().unsqueeze(0)
+
+        # Move number channels to the front.
+        state_tensor = state_tensor.permute(0, 3, 1, 2) 
+        return state_tensor
+
     def step(self, action, side):
         empty_val = bitpackTile(tile(NO_PLAYER, EMPTY_TYPE, 0, 0))
+        processed = np.zeros((MAP_W, MAP_H)) 
 
         for x in range(MAP_W):
             for y in range(MAP_H):
+                # Say a unit moves right, this is to cover the case for the unit to move again.
+                if processed[x][y]: continue 
+
                 tile_info = bitunpackTile(self.map[x][y])
                 if tile_info.player_n == side:
                     tx, ty = x, y
@@ -363,25 +373,29 @@ class RTSGame():
                             self.map[tx, ty] = bitpackTile(tile(side, VILLAGER_TYPE, VILLAGER_HP, 0))
                             tile_info.carry_gold -= VILLAGER_COST
                             self.map[x, y] = bitpackTile(tile_info)
+                            processed[tx][ty] = 1
 
+                    # Barrack makes troop
                     if tile_info.actor_type == BARRACK_TYPE:
                         if target_tile_info.player_n == NO_PLAYER and tile_info.carry_gold >= TROOP_COST:
                             self.map[tx, ty] = bitpackTile(tile(side, TROOP_TYPE, TROOP_HP, 0))
                             tile_info.carry_gold -= TROOP_COST
                             self.map[x, y] = bitpackTile(tile_info)
+                            processed[tx][ty] = 1
 
                     # Villager collect, return gold, make tc and barrack
                     elif tile_info.actor_type == VILLAGER_TYPE:
                         if action[x][y] == TURN_BARRACK and tile_info.carry_gold >= BARRACK_COST:
-                            map[x][y] = bitpackTile(newBarrackTile())
+                            self.map[x][y] = bitpackTile(newBarrackTile(side))
                         elif action[x][y] == TURN_TC and tile_info.carry_gold >= TC_COST:
-                            map[x][y] = bitpackTile(newTCTile())
+                            self.map[x][y] = bitpackTile(newTCTile(side))
                         elif target_tile_info.actor_type == GOLD_TYPE:
                             if tile_info.carry_gold <= 10:
                                 tile_info.carry_gold += 1
                             self.map[x, y] = bitpackTile(tile_info)
                         elif target_tile_info.player_n == NO_PLAYER:
-                            self.map = self.move_unit(self.map, (x, y), (tx, ty))
+                            self.move_unit((x, y), (tx, ty))
+                            processed[tx][ty] = 1
                         elif target_tile_info.player_n == side and target_tile_info.actor_type == TC_TYPE or target_tile_info.actor_type == BARRACK_TYPE:
                             target_tile_info.carry_gold += tile_info.carry_gold
                             tile_info.carry_gold = 0
@@ -390,14 +404,17 @@ class RTSGame():
                         
                     elif tile_info.actor_type == TROOP_TYPE:
                         if target_tile_info.player_n == NO_PLAYER:
-                            self.map = self.move_unit(self.map, (x, y), (tx, ty))
+                            self.move_unit((x, y), (tx, ty))
+                            processed[tx][ty] = 1
                         elif target_tile_info.player_n != side:
                             # Opponent unit do dmg
                             target_tile_info.hp -= 1
+                            if target_tile_info.hp <= 0:
+                                target_tile_info = tile(NO_PLAYER, EMPTY_TYPE, 0, 0)
                             self.map[tx,ty] = bitpackTile(target_tile_info)
 
                     
-        reward = self.get_score()
+        reward = self.get_score(side) - self.get_score((side + 1)%2)
         win = -1
         
         return action, self.get_state(), win, reward
@@ -414,8 +431,9 @@ class RTSGame():
                         score += tile_info.carry_gold
                     elif tile_info.actor_type == VILLAGER_TYPE:
                         score += 1
+        return score
                         
-def train(trainee: NNPlayer, opponent: Player, episodes):
+def train(trainee: NNPlayer, opponent: Player, episodes, gamma):
     # ACTOR CRITIC?
     # Initialize optimizer
     
@@ -427,7 +445,6 @@ def train(trainee: NNPlayer, opponent: Player, episodes):
     side = 0
     # Episodes
     for episode in range(episodes):
-        print(episode)
         step = 0
         done = False
         game = RTSGame()
@@ -439,46 +456,58 @@ def train(trainee: NNPlayer, opponent: Player, episodes):
         policy_optimizer.zero_grad()
         critic_optimizer.zero_grad()
         
-        while not done:
+        while not done and step <= 50:
             if side == 0:
-                state = game.get_state()
-                state_values.append(trainee.critic(state))
+                state_tensor = game.get_state_tensor()
+                state_values.append(trainee.critic(state_tensor))
                 action = trainee.getAction(game)
                 
                 log_prob = trainee.getProbabilities(action)
                 log_probs.append(log_prob)
                 
-                action, state, win, reward = game.step(action, side)
+                action, state_tensor, win, reward = game.step(action, side)
                 
                 rewards.append(reward)
                 
             else:
-                action, state, win, reward = game.step(opponent.getAction(game), side)
+                action, state_tensor, win, reward = game.step(opponent.getAction(game), side)
             
             side = (side + 1) % 2
+            step += 1 
         
         # Reward
-        rewards = torch.tensor(rewards)
-        rewards = (rewards - rewards.mean()) / (rewards.std())
-        # Lossfunctions
-        state_values = torch.tensor(state_values)
-        advantage = torch.sub(rewards, state_values)
-        log_probs = torch.tensor(log_probs)
-        policy_loss = -log_probs * advantage
+        returns = []
+        R = 0
+        for r in rewards[::-1]:
+            R = r + gamma * R
+            returns.insert(0,R)
+        returns = torch.tensor(returns, dtype=torch.float32)
+
+        # Make sure dont divide by 0
+        returns = (returns - returns.mean()) / (returns.std() + 1e-5)
+
+        # Loss functions
+        log_probs = torch.stack(log_probs) 
+        state_values = torch.cat(state_values).squeeze()
+
+        advantage = returns - state_values.detach()
+        
+        # Advantage above is [step] shaped while log_prob is probility for [step, MAP_W, MAP_H], need to expand out 
+        advantage = advantage.view(-1, 1, 1).expand_as(log_probs)
+        policy_loss = -(log_probs * advantage).mean()
             
-        critic_loss = F.huber_loss(state_values, rewards)
+        critic_loss = F.huber_loss(state_values, returns)
         policy_loss.backward()
         critic_loss.backward()
         # Optimze
         policy_optimizer.step()
         critic_optimizer.step()
+        print(f"Ep {episode}: Reward {sum(rewards)}")
     
     return None
 
-
-new = RTSGame()
-pygame.init()
-SCREEN = pygame.display.set_mode((WINDOW_W, WINDOW_H))
-new.setScreen(SCREEN)
-
-new.display()
+policy_nn = PolicyNetwork()
+critic_nn = CriticNetwork()
+policy_player = NNPlayer(0, policy_nn, critic_nn)
+random_player = RandomPlayer(1)
+train(policy_player, random_player, 2000, 0.95)
