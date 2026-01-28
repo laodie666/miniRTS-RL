@@ -393,7 +393,7 @@ class RTSGame():
                         if target_tile_info.player_n == NO_PLAYER:
                             self.move_unit((x, y), (tx, ty))
                             processed[tx][ty] = 1
-                        elif target_tile_info.player_n != side:
+                        elif target_tile_info.player_n != side and target_tile_info.player_n != NO_PLAYER:
                             # Opponent unit do dmg
                             target_tile_info.hp -= 1
                             if target_tile_info.hp <= 0:
@@ -454,7 +454,7 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma, entropy_coef):
         last_reward = 0
 
 
-        while not done and step <= 100:
+        while not done and step <= 150:
 
             if side == 0: 
                 state_tensor = game.get_state_tensor()
@@ -536,7 +536,7 @@ def pit(p1: Player, p2: Player, num_games):
         printed_side = 0
         slow = False
         skip = False
-        while not done and step <= 100:
+        while not done and step <= 150:
             
             if  game_num == 0:
                 if not printed_side:
@@ -633,4 +633,5 @@ for epoch in range(epochs):
         print("Performed better than before, updating agent.")
         policy_nn_copy, critic_nn_copy, policy_player_copy = copy_player(policy_nn, critic_nn, policy_player)
     else:
-        print("Performed worse, Remain.")
+        print("Performed worse, Revert.")
+        policy_nn, critic_nn, policy_player = copy_player(policy_nn_copy, critic_nn_copy, policy_player_copy)
