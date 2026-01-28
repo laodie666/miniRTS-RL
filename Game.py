@@ -311,9 +311,6 @@ class RTSGame():
         state_tensor = state_tensor.permute(0, 3, 1, 2) 
         return state_tensor
 
-    def flip_map(self):
-        self.map = np.flip(self.map, axis = 0)
-        return None
 
     def step(self, action, side):
         empty_val = bitpackTile(tile(NO_PLAYER, EMPTY_TYPE, 0, 0))
@@ -456,9 +453,8 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma):
                 last_reward = reward
                 
             else:
-                game.flip_map()
                 action, state_tensor, win, reward = game.step(opponent.getAction(game), side)
-                game.flip_map()
+
             
             side = (side + 1) % 2
             step += 1 
@@ -593,4 +589,8 @@ for epoch in range(epochs):
     win_rate = pit(policy_player, policy_player_copy, 50)
     print(win_rate)
     if win_rate[0] - 5 >= win_rate[1]:
+        print("Performed better than before, updating agent.")
         policy_nn_copy, critic_nn_copy, policy_player_copy = copy_player(policy_nn, critic_nn, policy_player)
+    else:
+        policy_nn, critic_nn, policy_player = copy_player(policy_nn_copy, critic_nn_copy, policy_player_copy)
+        print("Performed worse, reverting.")
