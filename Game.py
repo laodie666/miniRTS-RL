@@ -341,7 +341,7 @@ class RTSGame():
                     # Now actually make a move.
                     # TC makes villager
                     if tile_info.actor_type == TC_TYPE:
-                        if target_tile_info.player_n == NO_PLAYER and tile_info.carry_gold >= VILLAGER_COST:
+                        if target_tile_info.actor_type == EMPTY_TYPE and tile_info.carry_gold >= VILLAGER_COST:
                             self.map[tx, ty] = bitpackTile(tile(side, VILLAGER_TYPE, VILLAGER_HP, 0))
                             tile_info.carry_gold -= VILLAGER_COST
                             self.map[x, y] = bitpackTile(tile_info)
@@ -349,7 +349,7 @@ class RTSGame():
 
                     # Barrack makes troop
                     if tile_info.actor_type == BARRACK_TYPE:
-                        if target_tile_info.player_n == NO_PLAYER and tile_info.carry_gold >= TROOP_COST:
+                        if target_tile_info.actor_type == EMPTY_TYPE and tile_info.carry_gold >= TROOP_COST:
                             self.map[tx, ty] = bitpackTile(tile(side, TROOP_TYPE, TROOP_HP, 0))
                             tile_info.carry_gold -= TROOP_COST
                             self.map[x, y] = bitpackTile(tile_info)
