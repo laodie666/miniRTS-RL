@@ -250,9 +250,10 @@ class RTSGame():
         empty_val = bitpackTile(tile(NO_PLAYER, EMPTY_TYPE, 0, 0))
         
         self.map = np.full((MAP_W, MAP_H), empty_val)
-
-        self.map[2, 4] = bitpackTile(tile(0, TC_TYPE, TC_HP, 3))
-        self.map[7, 4] = bitpackTile(tile(1, TC_TYPE, TC_HP, 3))
+        self.left_side = random.randint(0,1)
+        self.right_side = (1+self.left_side)%2
+        self.map[2, 4] = bitpackTile(tile(self.left_side, TC_TYPE, TC_HP, 3))
+        self.map[7, 4] = bitpackTile(tile(self.right_side, TC_TYPE, TC_HP, 3))
 
         self.map[0, 4] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, 0))
         self.map[9, 4] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, 0))
@@ -507,12 +508,15 @@ def pit(p1: Player, p2: Player, num_games):
         step = 0
         done = False
         game = RTSGame()
-
+        printed_side = 0
         slow = False
         skip = False
         while not done and step <= 50:
             
             if  game_num == 0:
+                if not printed_side:
+                    print("sides ", game.left_side, game.right_side)
+                    printed_side = True
                 screen = pygame.display.set_mode((WINDOW_W, WINDOW_H))
                 game.setScreen(screen)
                 game.display()
@@ -542,13 +546,10 @@ def pit(p1: Player, p2: Player, num_games):
                             skip = True
 
             if side == 0: 
-                action = p1.getAction(game)
-                
-                action, state_tensor, win, reward = game.step(action, side)
+                action, state_tensor, win, reward = game.step(p1.getAction(game), side)
             else:
-                game.flip_map()
                 action, state_tensor, win, reward = game.step(p2.getAction(game), side)
-                game.flip_map()
+
             
             side = (side + 1) % 2
             step += 1 
