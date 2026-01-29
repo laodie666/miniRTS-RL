@@ -747,13 +747,14 @@ print(win_rate)
 
 epochs = 20
 for epoch in range(epochs):
-    torch.save(policy_nn.state_dict(), f"policy_checkpoint.pt")
-    torch.save(critic_nn.state_dict(), f"critic_checkpoint.pt")
+    
     print(f"epoch {epoch}")
     train(policy_player, policy_player_copy, 500, 0.95, 0.1)
     win_rate = pit(policy_player, policy_player_copy, 50)
     print(win_rate)
     if win_rate[0] - 5 >= win_rate[1]:
+        torch.save(policy_nn.state_dict(), f"policy_checkpoint.pt")
+        torch.save(critic_nn.state_dict(), f"critic_checkpoint.pt")
         print("Performed better than before, updating agent.")
         policy_nn_copy, critic_nn_copy, policy_player_copy = copy_player(policy_nn, critic_nn, policy_player, 1)
     else:
