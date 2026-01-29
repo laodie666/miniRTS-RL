@@ -28,8 +28,8 @@ NO_PLAYER = 2
 
 # Initial hp 4 bits
 TC_HP = 4
-VILLAGER_HP = 1
-TROOP_HP = 2
+VILLAGER_HP = 2
+TROOP_HP = 3
 GOLD_HP = -1
 BARRACK_HP = 3
 
@@ -177,7 +177,6 @@ class NNPlayer(Player):
         self.m = torch.distributions.Categorical(logits=logits)
 
         action = self.m.sample()
-        self.last_action = action
 
         return action
 
@@ -256,13 +255,18 @@ def newBarrackTile(side):
 def newTCTile(side):
     return tile(side, TC_TYPE, TC_HP, 0)
 
+def newVillagerTile(side):
+    return tile(side, VILLAGER_TYPE, VILLAGER_HP, 0)
+
+def newTroopTile(side):
+    return tile(side, TROOP_TYPE, TROOP_HP, 0)
+
 class RTSGame():
 
     # Referencing this https://github.com/suragnair/alpha-zero-general/tree/master/rts
     # NOTES: one hot encode every tile
     # Archer, spear, horseman rock paper scissor style.
     # Resource gathering.
-
 
     def setScreen(self, screen):
         self.screen = screen
@@ -277,6 +281,9 @@ class RTSGame():
         self.right_side = (1+self.left_side)%2
         self.map[LEFT_MAIN_TC_POS] = bitpackTile(tile(self.left_side, TC_TYPE, TC_HP, 3))
         self.map[RIGHT_MAIN_TC_POS] = bitpackTile(tile(self.right_side, TC_TYPE, TC_HP, 3))
+
+        self.map[LEFT_MAIN_TC_POS[0] - 1, LEFT_MAIN_TC_POS[1]] = bitpackTile(newVillagerTile(self.left_side))
+        self.map[RIGHT_MAIN_TC_POS[0] + 1, RIGHT_MAIN_TC_POS[1]] = bitpackTile(newVillagerTile(self.right_side))
 
         self.map[0, 4] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, 0))
         self.map[9, 4] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, 0))
@@ -377,7 +384,7 @@ class RTSGame():
                     # TC makes villager
                     if tile_info.actor_type == TC_TYPE:
                         if target_tile_info.actor_type == EMPTY_TYPE and tile_info.carry_gold >= VILLAGER_COST:
-                            self.map[tx, ty] = bitpackTile(tile(side, VILLAGER_TYPE, VILLAGER_HP, 0))
+                            self.map[tx, ty] = bitpackTile(newVillagerTile(side))
                             tile_info.carry_gold -= VILLAGER_COST
                             self.map[x, y] = bitpackTile(tile_info)
                             processed[x][y] = 1
@@ -386,7 +393,7 @@ class RTSGame():
                     # Barrack makes troop
                     elif tile_info.actor_type == BARRACK_TYPE:
                         if target_tile_info.actor_type == EMPTY_TYPE and tile_info.carry_gold >= TROOP_COST:
-                            self.map[tx, ty] = bitpackTile(tile(side, TROOP_TYPE, TROOP_HP, 0))
+                            self.map[tx, ty] = bitpackTile(newTroopTile(side))
                             tile_info.carry_gold -= TROOP_COST
                             self.map[x, y] = bitpackTile(tile_info)
                             processed[x][y] = 1
@@ -429,19 +436,22 @@ class RTSGame():
 
         self.update_onehot_encoding()
         win = -1
-        if self.get_score((side + 1)%2) is None:
-            print(f"GG player {(side + 1)%2} DIED")
-            win = side
-            reward = self.get_score(side) + 100
-        elif self.get_score(side) is None:
+        
+        if self.get_score(side) is None:
             print(f"GG player {side} DIED")
             win = (side + 1)%2
             reward = -100
+        elif self.get_score((side + 1)%2) is None:
+            print(f"GG player {(side + 1)%2} DIED")
+            win = side
+            reward = self.get_score(side) + 100
         else:
             reward = self.get_score(side) - self.get_score((side + 1)%2)
         
         
         return action, self.get_state(), win, reward
+
+
 
     def get_score(self, side):
         score = -12
@@ -466,9 +476,12 @@ class RTSGame():
                     elif tile_info.actor_type == VILLAGER_TYPE:
                         score += tile_info.hp
                         score += tile_info.carry_gold
+                        villager_count += 1
                     else:
                         score += tile_info.hp
                         score += tile_info.carry_gold
+        if villager_count == 0:
+            return None
         return score
                         
 def train(trainee: NNPlayer, opponent: Player, episodes, gamma, entropy_coef):
@@ -494,7 +507,7 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma, entropy_coef):
         policy_optimizer.zero_grad()
         critic_optimizer.zero_grad()
         
-        last_reward = 0
+        # last_reward = 0
 
 
         while not done and step <= 150:
@@ -516,8 +529,8 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma, entropy_coef):
                 
                 action, state_tensor, win, reward = game.step(action, side)
                 
-                rewards.append(reward - last_reward)
-                last_reward = reward
+                rewards.append(reward)
+                # last_reward = reward
                 
             else:
                 action, state_tensor, win, reward = game.step(opponent.getAction(game), side)
@@ -636,6 +649,66 @@ def pit(p1: Player, p2: Player, num_games):
                 win_rate[1] += 1
     return win_rate
 
+def show(p1: Player, p2: Player, num_games):
+    pygame.init()
+    clock = pygame.time.Clock()
+    
+    side = 0
+
+    # Episodes
+    for game_num in range(num_games):
+        step = 0
+        done = False
+        game = RTSGame()
+        printed_side = 0
+        slow = False
+        skip = False
+        while not done and step <= 150:
+            
+            if not printed_side:
+                print("sides ", game.left_side, game.right_side)
+                printed_side = True
+            screen = pygame.display.set_mode((WINDOW_W, WINDOW_H))
+            game.setScreen(screen)
+            game.display()
+            if skip:
+                clock.tick(0)
+            elif not slow:
+                clock.tick(15)
+            else:
+                clock.tick(2)
+            
+            if pygame.mouse.get_pressed()[0]:
+                if 0 <= pygame.mouse.get_pos()[0] <= WINDOW_W and 0 <= pygame.mouse.get_pos()[1] <= WINDOW_H:
+                    grid_x = pygame.mouse.get_pos()[0] // BLOCKSIZE
+                    grid_y = pygame.mouse.get_pos()[1] // BLOCKSIZE
+                    tile_info = bitunpackTile(game.map[grid_x][grid_y])
+                    
+                    print(f"mouse click at grid {(grid_x, grid_y)}")
+                    print(f"tile info: hp:{tile_info.hp}, gold:{tile_info.carry_gold}")
+            events = pygame.event.get()
+            for event in events:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE and not slow:
+                        slow = True
+                    elif event.key == pygame.K_SPACE and slow:
+                        slow = False
+                    elif event.key == pygame.K_s:
+                        skip = True
+
+            if side == 0: 
+                action, state_tensor, win, reward = game.step(p1.getAction(game), side)
+            else:
+                action, state_tensor, win, reward = game.step(p2.getAction(game), side)
+
+            
+            side = (side + 1) % 2
+            step += 1 
+
+            if win != -1:
+                done = True
+
+
 def copy_player(policy_nn, critic_nn, policy_player, side):
     policy_nn_copy = PolicyNetwork().to(device)
     policy_nn_copy.load_state_dict(policy_nn.state_dict())
@@ -651,19 +724,23 @@ print(torch.cuda.is_available())
 
 policy_nn = PolicyNetwork().to(device)
 
-# print("loaded policy checkpoint")
-# policy_state_dict = torch.load("policy_checkpoint.pt")
-# policy_nn.load_state_dict(policy_state_dict)
+print("loaded policy checkpoint")
+policy_state_dict = torch.load("policy_checkpoint.pt")
+policy_nn.load_state_dict(policy_state_dict)
 
 critic_nn = CriticNetwork().to(device)
 
-# print("loaded critic checkpoint")
-# critic_state_dict = torch.load("critic_checkpoint.pt")
-# critic_nn.load_state_dict(critic_state_dict)
+print("loaded critic checkpoint")
+critic_state_dict = torch.load("critic_checkpoint.pt")
+critic_nn.load_state_dict(critic_state_dict)
 
 policy_player = NNPlayer(0, policy_nn, critic_nn)
 
 policy_nn_copy, critic_nn_copy, policy_player_copy = copy_player(policy_nn, critic_nn, policy_player, 1)
+
+
+# To display progress
+# show(policy_player, policy_player_copy, 50)
 
 win_rate = pit(policy_player, policy_player_copy, 50)
 print(win_rate)
