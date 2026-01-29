@@ -507,7 +507,7 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma, entropy_coef):
         policy_optimizer.zero_grad()
         critic_optimizer.zero_grad()
         
-        # last_reward = 0
+        last_reward = 0
 
 
         while not done and step <= 150:
@@ -529,8 +529,8 @@ def train(trainee: NNPlayer, opponent: Player, episodes, gamma, entropy_coef):
                 
                 action, state_tensor, win, reward = game.step(action, side)
                 
-                rewards.append(reward)
-                # last_reward = reward
+                rewards.append(reward - last_reward)
+                last_reward = reward
                 
             else:
                 action, state_tensor, win, reward = game.step(opponent.getAction(game), side)
