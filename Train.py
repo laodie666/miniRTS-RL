@@ -117,6 +117,12 @@ def pit(p1: Player, p2: Player, num_games):
         step = 0
         done = False
         game = RTSGame()
+        if game_num < num_games/2:
+            game.left_side = 0
+            game.right_side = 1
+        else:
+            game.left_side = 1
+            game.right_side = 0
         printed_side = 0
         slow = False
         skip = False
