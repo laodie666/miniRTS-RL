@@ -8,7 +8,6 @@ from Player import *
 from Constant import *
 
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class tile:
 
@@ -38,34 +37,35 @@ class tile:
 
         return np.array(features, dtype=np.float32)
 
+
 def bitpackTile(tile: tile):
     value = 0
     index = 0
 
     value |= (tile.player_n) << index
-    index += MAX_PLAYERS.bit_length()
+    index += MAX_PLAYER_BITS
 
     value |= (tile.actor_type) << index
-    index += MAX_ACTORS.bit_length()
+    index += MAX_ACTORS_BITS
 
     value |= (tile.hp) << index
-    index += MAX_HP.bit_length()
+    index += MAX_HP_BITS
 
     value |= (tile.carry_gold) << index
 
     return value
 
 def bitunpackTile(value: int):
-    player_n = value & (1 << MAX_PLAYERS.bit_length()) - 1
-    value >>= MAX_PLAYERS.bit_length()
+    player_n = value & (1 << MAX_PLAYER_BITS) - 1
+    value >>= MAX_PLAYER_BITS
 
-    actor_type = value & (1<<MAX_ACTORS.bit_length()) - 1
-    value >>= MAX_ACTORS.bit_length()
+    actor_type = value & (1<<MAX_ACTORS_BITS) - 1
+    value >>= MAX_ACTORS_BITS
 
-    hp = value & (1<<MAX_HP.bit_length()) - 1
-    value >>= MAX_HP.bit_length()
+    hp = value & (1<<MAX_HP_BITS) - 1
+    value >>= MAX_HP_BITS
 
-    carry_gold = value & (1<<CARRY_CAPACITY.bit_length())-1
+    carry_gold = value & (1<<CARRY_CAPACITY_BITS)-1
 
     return tile(player_n, actor_type, hp, carry_gold)
 
@@ -105,14 +105,14 @@ class RTSGame():
         self.map[LEFT_MAIN_TC_POS[0] - 1, LEFT_MAIN_TC_POS[1]] = bitpackTile(newVillagerTile(self.left_side))
         self.map[RIGHT_MAIN_TC_POS[0] + 1, RIGHT_MAIN_TC_POS[1]] = bitpackTile(newVillagerTile(self.right_side))
 
-        self.map[0, 4] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, 0))
-        self.map[9, 4] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, 0))
+        self.map[0, 4] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, GOLD_GOLD_COUNT))
+        self.map[9, 4] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, GOLD_GOLD_COUNT))
         
-        self.map[0, 1] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, 0))
-        self.map[9, 1] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, 0))
+        self.map[0, 1] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, GOLD_GOLD_COUNT))
+        self.map[9, 1] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, GOLD_GOLD_COUNT))
         
-        self.map[0, 7] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, 0))
-        self.map[9, 7] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, 0))
+        self.map[0, 7] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, GOLD_GOLD_COUNT))
+        self.map[9, 7] = bitpackTile(tile(NO_PLAYER, GOLD_TYPE, GOLD_HP, GOLD_GOLD_COUNT))
 
         self.update_onehot_encoding()
 
@@ -173,7 +173,8 @@ class RTSGame():
         return state_tensor.to(device)
 
     # TODO: Vectorize game loop to make it more efficient.
-
+    # Alternative, Numba
+    # Alternative, keep track of set of units
     def step(self, action, side):
         processed = np.zeros((MAP_W, MAP_H), dtype=bool) 
 
@@ -229,7 +230,11 @@ class RTSGame():
                         elif target_tile_info.actor_type == GOLD_TYPE:
                             if tile_info.carry_gold <= 5:
                                 tile_info.carry_gold += 1
+                                target_tile_info.carry_gold -= 1
+                                if target_tile_info.carry_gold == 0:
+                                    target_tile_info = tile(NO_PLAYER, EMPTY_TYPE, 0, 0)
                             self.map[x, y] = bitpackTile(tile_info)
+                            self.map[tx,ty] = bitpackTile(target_tile_info)
                         elif target_tile_info.actor_type == EMPTY_TYPE:
                             self.move_unit((x, y), (tx, ty))
                             processed[x][y] = 1
@@ -255,21 +260,17 @@ class RTSGame():
                             self.map[tx,ty] = bitpackTile(target_tile_info)
 
         self.update_onehot_encoding()
-        win = -1
         
-        if self.get_score(side) is None:
-            print(f"GG player {side} DIED")
-            win = (side + 1)%2
-            reward = -100
-        elif self.get_score((side + 1)%2) is None:
-            print(f"GG player {(side + 1)%2} DIED")
-            win = side
-            reward = self.get_score(side) + 100
+        score_self = self.get_score(side)
+        score_enemy = self.get_score((side + 1) % 2)
+        
+        if score_self is None:
+            return action, self.get_state(), (side + 1) % 2, -100
+        elif score_enemy is None:
+            return action, self.get_state(), side, score_self + 100
         else:
-            reward = self.get_score(side) - self.get_score((side + 1)%2)
-        
-        
-        return action, self.get_state(), win, reward
+            reward = score_self - score_enemy
+            return action, self.get_state(), -1, reward
 
 
 

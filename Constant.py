@@ -1,3 +1,7 @@
+import torch
+device = torch.device("cpu")
+
+
 BLACK = (0, 0, 0)
 WHITE = (200, 200, 200)
 
@@ -6,7 +10,6 @@ MAP_W = 10
 BLOCKSIZE = 100 # for gridsize 
 WINDOW_H = MAP_H * BLOCKSIZE
 WINDOW_W = MAP_W * BLOCKSIZE
-
 
 # NOTE: Tile info (player number, actor type, health_points, is_carrying_gold)
     # Player 2 empty, 0 and 1 are players 3 bits
@@ -18,7 +21,9 @@ TC_HP = 4
 VILLAGER_HP = 2
 TROOP_HP = 3
 GOLD_HP = -1
-BARRACK_HP = 3
+BARRACK_HP = 4
+
+GOLD_GOLD_COUNT = 10
 
 VILLAGER_COST = 1
 TROOP_COST = 1
@@ -29,6 +34,11 @@ MAX_PLAYERS = 4
 MAX_ACTORS = 8
 MAX_HP = 15
 CARRY_CAPACITY = 10
+
+MAX_PLAYER_BITS = MAX_PLAYERS.bit_length()
+MAX_ACTORS_BITS = MAX_ACTORS.bit_length()
+MAX_HP_BITS = MAX_HP.bit_length()
+CARRY_CAPACITY_BITS = CARRY_CAPACITY.bit_length()
 
 # Actor type 4 bits
 EMPTY_TYPE = 5
