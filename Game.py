@@ -97,8 +97,8 @@ class RTSGame():
         empty_val = bitpackTile(tile(NO_PLAYER, EMPTY_TYPE, 0, 0))
         
         self.map = np.full((MAP_W, MAP_H), empty_val)
-        self.left_side = random.randint(0,1)
-        self.right_side = (1+self.left_side)%2
+        self.left_side = 0
+        self.right_side = 1
         self.map[LEFT_MAIN_TC_POS] = bitpackTile(tile(self.left_side, TC_TYPE, TC_HP, 3))
         self.map[RIGHT_MAIN_TC_POS] = bitpackTile(tile(self.right_side, TC_TYPE, TC_HP, 3))
 

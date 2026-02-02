@@ -22,6 +22,8 @@ def get_cannonical_state(state_tensor, side):
     # (Batch, Channels, W, H), swap 0 and 1 player number of one hot encoding.
     canonical_state[:,0,:,:] = state_tensor[:,1,:,:]
     canonical_state[:,1,:,:] = state_tensor[:,0,:,:]
+    # Flip the board horizontally
+    canonical_state = torch.flip(canonical_state, dims=[2])
     return canonical_state
 
 
@@ -39,6 +41,15 @@ class NNPlayer(Player):
         self.m = torch.distributions.Categorical(logits=logits)
 
         action = self.m.sample()
+        
+        # Flip action horizontally if side == 1
+        if self.side == 1:
+            action = torch.flip(action, dims=[0])
+            # Also swap LEFT and RIGHT actions to account for horizontal flip
+            left_mask = action == ACT_LEFT
+            right_mask = action == ACT_RIGHT
+            action[left_mask] = ACT_RIGHT
+            action[right_mask] = ACT_LEFT
 
         return action
 
