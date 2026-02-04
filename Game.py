@@ -119,7 +119,7 @@ class RTSGame():
         if not pygame.font.get_init():
             pygame.font.init()
         self.unit_font = pygame.font.SysFont("monospace", 15, bold=True)
-        self.stats_font = pygame.font.SysFont("Arial", 8, bold=False)
+        self.stats_font = pygame.font.SysFont("Arial", 20, bold=False)
                 
     def update_onehot_encoding(self):
         self.onehot_encoded_tiles = np.array([(bitunpackTile(self.map[x][y])).onehotEncode() for x in range(MAP_W) for y in range(MAP_H)]).reshape(MAP_W, MAP_H, -1)
@@ -177,7 +177,7 @@ class RTSGame():
     # Alternative, keep track of set of units
     def step(self, action, side):
         processed = np.zeros((MAP_W, MAP_H), dtype=bool) 
-
+        reward = 0
         for x in range(MAP_W):
             for y in range(MAP_H):
                 # Say a unit moves right, this is to cover the case for the unit to move again.
@@ -187,7 +187,7 @@ class RTSGame():
                 if tile_info.player_n == side:
                     tx, ty = x, y
                     
-                    if action[x][y] == ACT_DOWN:
+                    if action[x][y] == ACT_DOWN:    
                         ty += 1
                     elif action[x][y] == ACT_UP:
                         ty -= 1
@@ -255,8 +255,10 @@ class RTSGame():
                         elif target_tile_info.player_n != side and target_tile_info.player_n != NO_PLAYER:
                             # Opponent unit do dmg
                             target_tile_info.hp -= 1
+                            reward += 5
                             if target_tile_info.hp <= 0:
                                 target_tile_info = tile(NO_PLAYER, EMPTY_TYPE, 0, 0)
+                                reward += 5
                             self.map[tx,ty] = bitpackTile(target_tile_info)
 
         self.update_onehot_encoding()
@@ -265,11 +267,13 @@ class RTSGame():
         score_enemy = self.get_score((side + 1) % 2)
         
         if score_self is None:
+            print(f"player {side} died")
             return action, self.get_state(), (side + 1) % 2, -100
+        
         elif score_enemy is None:
-            return action, self.get_state(), side, score_self + 100
+            print(f"player {(side+1)%2} died")
+            return action, self.get_state(), side, 100
         else:
-            reward = score_self - score_enemy
             return action, self.get_state(), -1, reward
 
 

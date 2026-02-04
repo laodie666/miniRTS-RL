@@ -31,8 +31,6 @@ def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, en
         
         policy_optimizer.zero_grad()
         critic_optimizer.zero_grad()
-        
-        last_reward = 0
 
 
         while not done and step <= 200:
@@ -52,10 +50,16 @@ def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, en
                 log_prob = trainee.getProbabilities(action)
                 log_probs.append(log_prob)
                 
+                prev_reward = game.get_score(side) - game.get_score((side+1)%2)
+                
                 action, state_tensor, win, reward = game.step(action, side)
                 
-                rewards.append(reward - last_reward)
-                last_reward = reward
+                if win != -1:
+                    rewards.append(reward)
+                    
+                else:
+                    cur_reward = game.get_score(side) - game.get_score((side+1)%2)
+                    rewards.append(cur_reward - prev_reward + reward)
                 
             else:
                 action, state_tensor, win, reward = game.step(opponent.getAction(game), side)
@@ -68,6 +72,7 @@ def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, en
         
         # Reward, change of game score
         rewards = np.array(rewards)
+        print("rewards", rewards.sum())
         returns = []
         R = 0
         for r in rewards[::-1]:
