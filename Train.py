@@ -86,8 +86,6 @@ def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, en
             R = r + gamma * R
             returns.insert(0,R)
         returns = torch.tensor(returns, dtype=torch.float32).to(device)
-        # Make sure dont divide by 0
-        returns = (returns - returns.mean()) / (returns.std() + 1e-7)
 
         # Loss functions
         log_probs = torch.stack(log_probs) 
@@ -96,6 +94,8 @@ def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, en
         entropies = torch.stack(entropies)
 
         advantage = returns - state_values.detach()
+        
+        advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-7)
         
         entropy = entropies * masks.float()  
         entropy = entropy.sum() / (masks.sum() + 1e-7)
