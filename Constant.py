@@ -1,6 +1,7 @@
 import torch
 device = torch.device("cpu")
 
+GAME_STEP_LIMIT = 400
 
 BLACK = (0, 0, 0)
 WHITE = (200, 200, 200)

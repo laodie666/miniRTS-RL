@@ -34,7 +34,7 @@ def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, en
         critic_optimizer.zero_grad()
 
 
-        while not done and step <= 200:
+        while not done and step <= GAME_STEP_LIMIT:
 
             if side == 0: 
                 state_tensor = game.get_state_tensor()
@@ -133,7 +133,7 @@ def pit(p1: Player, p2: Player, num_games):
         printed_side = 0
         slow = False
         skip = False
-        while not done and step <= 200:
+        while not done and step <= GAME_STEP_LIMIT:
             
             if  game_num == 0:
                 if not printed_side:
@@ -201,7 +201,7 @@ def show(p1: Player, p2: Player, num_games):
         printed_side = 0
         slow = False
         skip = False
-        while not done and step <= 150:
+        while not done and step <= GAME_STEP_LIMIT:
             
             if not printed_side:
                 print("sides ", game.left_side, game.right_side)

@@ -38,7 +38,7 @@ epochs = 20
 for epoch in range(epochs):
     
     print(f"epoch {epoch}")
-    train(policy_player, policy_player_copy, 500, 0.95)
+    train(policy_player, policy_player_copy, 250, 0.95)
     win_rate = pit(policy_player, policy_player_copy, 60)
     print(win_rate)
     if win_rate[0] - 5 >= win_rate[1]:
