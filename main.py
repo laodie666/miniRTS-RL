@@ -2,8 +2,6 @@ from NN import *
 from Player import *
 from Train import *
 
-
-
 def copy_player(policy_nn, critic_nn, policy_player, side):
     policy_nn_copy = PolicyNetwork().to(device)
     policy_nn_copy.load_state_dict(policy_nn.state_dict())
@@ -18,12 +16,11 @@ def copy_player(policy_nn, critic_nn, policy_player, side):
 print(torch.cuda.is_available())
 
 policy_nn = PolicyNetwork().to(device)
+critic_nn = CriticNetwork().to(device)
 
 print("loaded policy checkpoint")
 policy_state_dict = torch.load("policy_checkpoint.pt")
 policy_nn.load_state_dict(policy_state_dict)
-
-critic_nn = CriticNetwork().to(device)
 
 print("loaded critic checkpoint")
 critic_state_dict = torch.load("critic_checkpoint.pt")
@@ -41,15 +38,14 @@ epochs = 20
 for epoch in range(epochs):
     
     print(f"epoch {epoch}")
-    train(policy_player, policy_player_copy, 500, 1, 0.1)
+    train(policy_player, policy_player_copy, 500, 0.95)
     win_rate = pit(policy_player, policy_player_copy, 60)
     print(win_rate)
-    if win_rate[0] - 10 >= win_rate[1]:
+    if win_rate[0] - 5 >= win_rate[1]:
         torch.save(policy_nn.state_dict(), f"policy_checkpoint.pt")
         torch.save(critic_nn.state_dict(), f"critic_checkpoint.pt")
         print("Performed better than before, updating agent.")
         policy_nn_copy, critic_nn_copy, policy_player_copy = copy_player(policy_nn, critic_nn, policy_player, 1)
     else:
-
         print("Performed worse, Keep training.")
         # policy_nn, critic_nn, policy_player = copy_player(policy_nn_copy, critic_nn_copy, policy_player_copy)

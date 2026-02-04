@@ -99,6 +99,9 @@ class RTSGame():
         self.map = np.full((MAP_W, MAP_H), empty_val)
         self.left_side = 0
         self.right_side = 1
+        
+        self.kills = np.zeros((2), np.int16)
+        
         self.map[LEFT_MAIN_TC_POS] = bitpackTile(tile(self.left_side, TC_TYPE, TC_HP, 3))
         self.map[RIGHT_MAIN_TC_POS] = bitpackTile(tile(self.right_side, TC_TYPE, TC_HP, 3))
 
@@ -255,10 +258,10 @@ class RTSGame():
                         elif target_tile_info.player_n != side and target_tile_info.player_n != NO_PLAYER:
                             # Opponent unit do dmg
                             target_tile_info.hp -= 1
-                            reward += 5
+                            self.kills[side] += 1
                             if target_tile_info.hp <= 0:
                                 target_tile_info = tile(NO_PLAYER, EMPTY_TYPE, 0, 0)
-                                reward += 5
+                                
                             self.map[tx,ty] = bitpackTile(target_tile_info)
 
         self.update_onehot_encoding()
@@ -307,6 +310,7 @@ class RTSGame():
                         score += tile_info.carry_gold
         if villager_count == 0:
             return None
+        score += self.kills[side] * 5
         return score
                         
 

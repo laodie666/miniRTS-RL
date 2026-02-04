@@ -9,7 +9,7 @@ from Game import *
 from Constant import *
 
 
-def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, entropy_coef = 0.1):
+def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, entropy_coef = 0.05):
     # ACTOR CRITIC?
     # Initialize optimizer
     
@@ -28,6 +28,7 @@ def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, en
         state_values = []
         # Mask out empty spaces
         masks = []
+        entropies = []
         
         policy_optimizer.zero_grad()
         critic_optimizer.zero_grad()
@@ -46,6 +47,7 @@ def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, en
 
                 state_values.append(trainee.critic(state_tensor))
                 action = trainee.getAction(game)
+                entropies.append(trainee.m.entropy())
                 
                 log_prob = trainee.getProbabilities(action)
                 log_probs.append(log_prob)
@@ -74,7 +76,12 @@ def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, en
         rewards = np.array(rewards)
         print("rewards", rewards.sum())
         returns = []
-        R = 0
+        
+        if done:
+            R = 0
+        else:
+            R = trainee.critic(game.get_state_tensor()).item()
+
         for r in rewards[::-1]:
             R = r + gamma * R
             returns.insert(0,R)
@@ -86,10 +93,11 @@ def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, en
         log_probs = torch.stack(log_probs) 
         state_values = torch.cat(state_values).squeeze()
         masks = torch.stack(masks)
+        entropies = torch.stack(entropies)
 
         advantage = returns - state_values.detach()
         
-        entropy = trainee.m.entropy() * masks.float()  
+        entropy = entropies * masks.float()  
         entropy = entropy.sum() / (masks.sum() + 1e-7)
         
         # Advantage above is [step] shaped while log_prob is probility for [step, MAP_W, MAP_H], need to expand out 
