@@ -45,7 +45,7 @@ def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, en
                 mask = player_map > 0
                 masks.append(mask)
 
-                state_values.append(trainee.critic(state_tensor))
+                state_values.append(trainee.critic(state_tensor, game.get_kills_tensor()))
                 action = trainee.getAction(game)
                 entropies.append(trainee.m.entropy())
                 
@@ -80,7 +80,7 @@ def train(trainee: NNPlayer, opponent: Player, episodes  = 500, gamma = 0.95, en
         if done:
             R = 0
         else:
-            R = trainee.critic(game.get_state_tensor()).item()
+            R = trainee.critic(game.get_state_tensor(), game.get_kills_tensor()).item()
 
         for r in rewards[::-1]:
             R = r + gamma * R

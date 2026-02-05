@@ -175,6 +175,9 @@ class RTSGame():
         state_tensor = state_tensor.permute(0, 3, 1, 2) 
         return state_tensor.to(device)
 
+    def get_kills_tensor(self):
+        return torch.tensor(self.kills)
+
     # TODO: Vectorize game loop to make it more efficient.
     # Alternative, Numba
     # Alternative, keep track of set of units
