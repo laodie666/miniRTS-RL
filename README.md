@@ -16,11 +16,3 @@ The reinforcement learning algorithm currently implemented is Advantage Actor Cr
 
 As shown above, without training the villagers wander around aimlessly. After training, the behavior of collecting resources and producing additional villagers becomes much more apparent.
 
-## TODO
-
-- Randomize the spawn locations of various game objects so the policy does not overfit to the map
-- Optimize the game logic so training runs faster
-- Update the reward function to prioritize winning the game through combat rather than maximizing villager production
-- Implement PPO and compare its performance
-- Add multiple troop types with a rock paper scissors style counter system, then implement a multi agent learning setup inspired by the AlphaStar paper so the agent learns generalized strategies rather than overfitting to past versions of itself
-- Add fog of war so agents no longer have perfect information
